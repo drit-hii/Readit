@@ -7,14 +7,16 @@ struct HomeView: View {
     @Environment(AppRouter.self) private var router
     @Query(sort: \ReadingSession.startedAt) private var sessions: [ReadingSession]
     @Query(filter: #Predicate<Book> { $0.statusRaw == "reading" }, sort: \Book.addedAt) private var reading: [Book]
-
+    
     @AppStorage("goalKind") private var goalKind: GoalKind = .minutes
     @AppStorage("goalMinutes") private var goalMinutes = 30
     @AppStorage("goalPages") private var goalPages = 20
-
+    
     @State private var showGoal = false
     @State private var showPicker = false
-
+    @State private var selectedID: UUID?
+    @ScaledMetric(relativeTo: .largeTitle) private var challengeSize: CGFloat = 56
+    
     private var days: [DayStat] { Stats.lastDays(sessions: sessions) }
     private var today: DayStat { days.last ?? DayStat(date: .now, seconds: 0, pages: 0) }
     private var target: Int { max(goalKind == .minutes ? goalMinutes : goalPages, 1) }
@@ -23,7 +25,7 @@ struct HomeView: View {
         let done = goalKind == .minutes ? today.seconds / 60 : Double(today.pages)
         return min(done / Double(target), 1)
     }
-
+    
     var body: some View {
         NavigationStack {
             Group { reading.isEmpty && timer.phase == .idle ? AnyView(emptyState) : AnyView(todayState) }
@@ -32,60 +34,143 @@ struct HomeView: View {
         .sheet(isPresented: $showGoal) { GoalSheet() }
         .sheet(isPresented: $showPicker) { BookPickerView(defaultStatus: .reading) }
     }
-
+    
     // MARK: Today (book in progress)
-
+    
+    private var current: Book? { reading.first { $0.id == selectedID } ?? reading.first }
+    
     private var todayState: some View {
         ScrollView {
-            VStack(spacing: 28) {
-                VStack(spacing: 10) {
-                    Text("For today")
-                        .font(.caption.weight(.medium)).tracking(0.8).textCase(.uppercase)
-                        .foregroundStyle(Color.readieAccent)
-                    Button { showGoal = true } label: {
-                        ProgressRing(progress: progress, remaining: remaining,
-                                     unit: goalKind == .minutes ? "min" : "pages", done: progress >= 1)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(goalKind == .minutes
-                        ? "Daily goal: \(today.minutes) of \(target) minutes read"
-                        : "Daily goal: \(today.pages) of \(target) pages read")
-                    .accessibilityHint("Edit your daily goal")
-
-                    if let usual = Stats.usual(days, kind: goalKind) {
-                        Text(goalKind == .minutes ? "Your usual is about \(usual) min."
-                                                  : "Your usual is about \(usual) pages.")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }
-                }
-
-                startButton
-
+            VStack(alignment: .leading, spacing: 24) {
+                challenge
+                bookCarousel
+                
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Last 7 days").font(.title3.weight(.semibold))
                         Spacer()
-                        let streak = Stats.streak(sessions: sessions)
-                        if streak > 0 {
-                            Label("\(streak)-day streak", systemImage: "bookmark.fill")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(Color.readieAccent)
+                        NavigationLink { HistoryView() } label: {
+                            HStack(spacing: 4) {
+                                Text("History")
+                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
+                            }
+                            .font(.subheadline)
+                            .foregroundStyle(Color.readieAccent)
                         }
                     }
-                    Card { WeekChart(days: days, kind: goalKind, goal: target).padding(16) }
+                    WeekChart(days: days, kind: goalKind, goal: target)
                 }
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
-        .navigationTitle("Today")
+        .navigationTitle("Hello Reader")
     }
-
-    private var startButton: some View {
-        Button(action: start) {
+    
+    private var challenge: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Today's challenge")
+                .font(.footnote.weight(.medium)).tracking(0.8).textCase(.uppercase)
+                .foregroundStyle(Color.readieAccent)
+            
+            Button { showGoal = true } label: {
+                Text(goalKind == .minutes ? "\(target) min" : "\(target) pages")
+                    .font(.system(size: challengeSize, weight: .bold))
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Edit your daily goal")
+            
+            if let usual = Stats.usual(days, kind: goalKind) {
+                Text(goalKind == .minutes ? "Your usual is about \(usual) min."
+                     : "Your usual is about \(usual) pages.")
+                .font(.subheadline).foregroundStyle(.secondary)
+            }
+            
+            Capsule()
+                .fill(Color.readieAccent.opacity(0.18))
+                .frame(height: 10)
+                .overlay(alignment: .leading) {
+                    GeometryReader { g in
+                        Capsule().fill(Color.readieAccent).frame(width: g.size.width * progress)
+                    }
+                }
+                .padding(.top, 6)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Daily progress")
+                .accessibilityValue("\(Int(progress * 100)) percent")
+        }
+    }
+    
+    private var bookCarousel: some View {
+        VStack(spacing: 14) {
+            if reading.isEmpty {
+                startButton(nil)   // free reading while the timer is running
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 0) {
+                        ForEach(reading) { book in
+                            bookCard(book)
+                                .containerRelativeFrame(.horizontal)
+                                .id(book.id)
+                        }
+                    }
+                    .scrollTargetLayout()
+                }
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $selectedID)
+                .scrollClipDisabled()
+                
+                if reading.count > 1 {
+                    HStack(spacing: 8) {
+                        ForEach(reading) { book in
+                            Circle()
+                                .fill(book.id == current?.id ? Color.readieAccent : Color(.tertiaryLabel))
+                                .frame(width: 7, height: 7)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Book \((reading.firstIndex { $0.id == current?.id } ?? 0) + 1) of \(reading.count)")
+                }
+            }
+        }
+    }
+    
+    private func bookCard(_ book: Book) -> some View {
+        Card(fill: Color(.secondarySystemBackground)) {
+            VStack(spacing: 20) {
+                HStack(alignment: .top, spacing: 16) {
+                    BookCover(book: book, width: 120, height: 180)
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Now reading")
+                            .font(.footnote.weight(.medium)).textCase(.uppercase)
+                            .foregroundStyle(Color.readieAccent)
+                        Text(book.title).font(.title2).lineLimit(3)
+                        Text(book.author).font(.title3).foregroundStyle(.secondary).lineLimit(2)
+                        Spacer(minLength: 8)
+                        ProgressView(value: book.progress)
+                            .tint(Color.readieAccent)
+                            .accessibilityHidden(true)
+                        Text(book.pageCount > 0 ? "Page \(book.currentPage) of \(book.pageCount)"
+                             : "Page \(book.currentPage)")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                startButton(book)
+            }
+            .padding(16)
+        }
+        .accessibilityElement(children: .contain)
+    }
+    
+    private func startButton(_ book: Book?) -> some View {
+        Button { start(book) } label: {
             Group {
                 if timer.phase == .idle {
-                    Label("Start Reading", systemImage: "book.fill")
+                    Label("Start reading", systemImage: "book.fill")
                 } else {
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
                         Label("Resume · \(clock(timer.elapsed(at: ctx.date)))", systemImage: "book.fill")
@@ -94,24 +179,23 @@ struct HomeView: View {
                 }
             }
             .font(.headline)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
         }
         .buttonStyle(.glassProminent)
         .tint(.readieButton)
         .controlSize(.large)
     }
-
-    private func start() {
+    
+    private func start(_ book: Book?) {
         if timer.phase == .idle {
-            let book = reading.first
             timer.start(bookID: book?.id, title: book?.title ?? "", author: book?.author ?? "")
         }
         router.showSession = true
     }
-
+    
     // MARK: Empty state (no book in progress)
-
+    
     private var emptyState: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -122,7 +206,7 @@ struct HomeView: View {
                     Text("Pick a book to start").font(.title3).foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .combine)
-
+                
                 Card(fill: Color(.secondarySystemBackground)) {
                     VStack(spacing: 18) {
                         HStack(alignment: .top, spacing: 16) {
@@ -135,7 +219,7 @@ struct HomeView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Pick a book")
-
+                            
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("No book in progress")
                                     .font(.caption.weight(.semibold)).textCase(.uppercase)
@@ -154,7 +238,7 @@ struct HomeView: View {
                     }
                     .padding(16)
                 }
-
+                
                 Text("Your bookshelf").font(.title3.weight(.semibold))
                 Card(fill: Color(.secondarySystemBackground)) {
                     VStack(spacing: 14) {
@@ -168,7 +252,7 @@ struct HomeView: View {
                         WeekdayAxis(days: days).padding(.horizontal, 6).padding(.bottom, 10)
                     }
                 }
-
+                
                 Button("Start without a book") {
                     timer.start(bookID: nil, title: "", author: "")
                     router.showSession = true
@@ -182,7 +266,6 @@ struct HomeView: View {
         .toolbarVisibility(.hidden, for: .navigationBar)
     }
 }
-
 // MARK: - Components
 
 struct ProgressRing: View {
@@ -190,11 +273,11 @@ struct ProgressRing: View {
     let remaining: Int
     let unit: LocalizedStringKey
     let done: Bool
-
+    
     @ScaledMetric(relativeTo: .largeTitle) private var numberSize: CGFloat = 64
     @ScaledMetric(relativeTo: .largeTitle) private var diameter: CGFloat = 188
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
+    
     var body: some View {
         ZStack {
             Circle().stroke(Color.readieAccent.opacity(0.18), lineWidth: 16)
@@ -243,9 +326,9 @@ struct WeekChart: View {
     let days: [DayStat]
     let kind: GoalKind
     let goal: Int
-
+    
     private let maxSpine: CGFloat = 130
-
+    
     var body: some View {
         let maxValue = max(days.map { $0.value(kind) }.max() ?? 0, goal, 1)
         VStack(spacing: 10) {
@@ -255,9 +338,9 @@ struct WeekChart: View {
                 }
             }
             .frame(height: 176, alignment: .bottom)
-
+            
             Rectangle().fill(Color(.separator)).frame(height: 1)
-
+            
             HStack(spacing: 0) {
                 ForEach(Array(days.enumerated()), id: \.offset) { index, day in
                     checkCell(day, index: index)
@@ -267,7 +350,7 @@ struct WeekChart: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(summary)
     }
-
+    
     @ViewBuilder
     private func column(_ day: DayStat, index: Int, maxValue: Int) -> some View {
         let value = day.value(kind)
@@ -285,7 +368,7 @@ struct WeekChart: View {
         }
         .frame(maxWidth: .infinity)
     }
-
+    
     private func checkCell(_ day: DayStat, index: Int) -> some View {
         let has = { (i: Int) in days.indices.contains(i) && days[i].value(kind) > 0 }
         let isToday = index == days.count - 1
@@ -314,17 +397,46 @@ struct WeekChart: View {
         }
         .frame(maxWidth: .infinity)
     }
-
+    
     private func letter(_ d: Date) -> String {
         let cal = Calendar.current
         return cal.veryShortWeekdaySymbols[cal.component(.weekday, from: d) - 1]
     }
-
+    
     private var summary: String {
         let parts = days.map { d -> String in
             let name = d.date.formatted(.dateTime.weekday(.wide))
             return kind == .minutes ? "\(name): \(d.minutes) minutes" : "\(name): \(d.pages) pages"
         }
         return "Last 7 days. " + parts.joined(separator: ", ")
+    }
+}
+
+struct HistoryView: View {
+    @Query(sort: \ReadingSession.startedAt, order: .reverse) private var sessions: [ReadingSession]
+    
+    var body: some View {
+        List(sessions) { s in
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(s.book?.title ?? String(localized: "Free reading")).font(.headline)
+                    Text(s.startedAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(clock(s.duration)).monospacedDigit()
+                    if s.pages > 0 { Text("\(s.pages) pages").font(.footnote).foregroundStyle(.secondary) }
+                }
+            }
+        }
+        .navigationTitle("History")
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay {
+            if sessions.isEmpty {
+                ContentUnavailableView("No Sessions Yet", systemImage: "clock",
+                                       description: Text("Finished reading sessions appear here."))
+            }
+        }
     }
 }

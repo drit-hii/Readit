@@ -25,7 +25,7 @@ final class CatalogStore {
         books = items.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 
-    /// Case- and diacritic-insensitive search across title and author.
+    ///Case- and diacritic-insensitive search across title and author.
     func search(_ query: String) -> [CatalogBook] {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return books }
