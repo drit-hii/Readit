@@ -2,6 +2,9 @@
 import Foundation
 import ActivityKit
 import Observation
+#if os(iOS)
+import CallKit
+#endif
 
 @Observable @MainActor
 final class ReadingTimer {
@@ -9,13 +12,34 @@ final class ReadingTimer {
 
     private(set) var phase: Phase = .idle
     private(set) var bookID: UUID?
+    /// Free-reading name typed in the session screen.
+    var label = "" { didSet { defaults.set(label, forKey: "timer.label") } }
 
     private var accumulated: TimeInterval = 0
     private var resumedAt: Date?
     private var activity: Activity<ReadingActivityAttributes>?
     private let defaults = UserDefaults.standard
+    private var pausedByCall = false
+    #if os(iOS)
+    private var callWatcher: CallWatcher?
+    #endif
 
-    init() { restore() }
+    init() {
+        restore()
+        #if os(iOS)
+        callWatcher = CallWatcher { [weak self] inCall in self?.callChanged(inCall) }
+        #endif
+    }
+
+    /// Pauses during a phone call and resumes when it ends, unless the reader took over in between.
+    private func callChanged(_ inCall: Bool) {
+        if inCall, phase == .running {
+            pause()
+            pausedByCall = true
+        } else if !inCall, pausedByCall {
+            resume()
+        }
+    }
 
     func elapsed(at date: Date = .now) -> TimeInterval {
         accumulated + (resumedAt.map { max(0, date.timeIntervalSince($0)) } ?? 0)
@@ -31,11 +55,6 @@ final class ReadingTimer {
         beginActivity(title: title.isEmpty ? String(localized: "Reading") : title)
     }
 
-    func setBook(_ id: UUID?) {
-        bookID = id
-        persist()
-    }
-
     func pause() {
         guard phase == .running else { return }
         accumulated = elapsed()
@@ -46,6 +65,7 @@ final class ReadingTimer {
     }
 
     func resume() {
+        pausedByCall = false
         guard phase == .paused else { return }
         resumedAt = .now
         phase = .running
@@ -65,10 +85,12 @@ final class ReadingTimer {
         let current = activity
         Task { await current?.end(nil, dismissalPolicy: .immediate) }
         activity = nil
+        pausedByCall = false
         phase = .idle
         accumulated = 0
         resumedAt = nil
         bookID = nil
+        label = ""
         persist()
     }
 
@@ -117,9 +139,28 @@ final class ReadingTimer {
         accumulated = defaults.double(forKey: "timer.accumulated")
         resumedAt = defaults.object(forKey: "timer.resumedAt") as? Date
         bookID = defaults.string(forKey: "timer.bookID").flatMap(UUID.init)
+        label = defaults.string(forKey: "timer.label") ?? ""
         activity = Activity<ReadingActivityAttributes>.activities.first
     }
 }
+
+#if os(iOS)
+// shortcut: calls are only seen while the app is running; a call taken with Readie suspended in the background isn't paused.
+private final class CallWatcher: NSObject, CXCallObserverDelegate {
+    private let observer = CXCallObserver()
+    private let onChange: (Bool) -> Void
+
+    init(onChange: @escaping (Bool) -> Void) {
+        self.onChange = onChange
+        super.init()
+        observer.setDelegate(self, queue: .main)
+    }
+
+    nonisolated func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
+        MainActor.assumeIsolated { onChange(observer.calls.contains { !$0.hasEnded }) }
+    }
+}
+#endif
 
 @Observable @MainActor
 final class AppRouter {

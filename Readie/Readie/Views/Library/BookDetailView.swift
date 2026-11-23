@@ -71,7 +71,6 @@ struct BookDetailView: View {
     }
 
     private func startReading() {
-        if book.status == .wantToRead { book.status = .reading }
         if timer.phase == .idle { timer.start(bookID: book.id, title: book.title, author: book.author) }
         router.showSession = true
     }

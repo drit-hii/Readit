@@ -4,11 +4,10 @@ import SwiftData
 import SwiftUI
 
 enum ReadingStatus: String, Codable, CaseIterable, Identifiable {
-    case wantToRead, reading, read
+    case reading, read
     var id: String { rawValue }
     var title: LocalizedStringKey {
         switch self {
-        case .wantToRead: "Want to read"
         case .reading: "Currently reading"
         case .read: "Already read"
         }
@@ -28,7 +27,7 @@ final class Book {
     var author: String = ""
     var pageCount: Int = 0
     var currentPage: Int = 0
-    var statusRaw: String = ReadingStatus.wantToRead.rawValue
+    var statusRaw: String = ReadingStatus.reading.rawValue
     var colorIndex: Int = 0
     var catalogID: String?
     var addedAt: Date = Date()
@@ -39,7 +38,7 @@ final class Book {
     @Relationship(deleteRule: .nullify, inverse: \VoiceMemo.book) var memos: [VoiceMemo] = []
 
     init(title: String, author: String, pageCount: Int = 0,
-         status: ReadingStatus = .wantToRead, catalogID: String? = nil) {
+         status: ReadingStatus = .reading, catalogID: String? = nil) {
         self.title = title
         self.author = author
         self.pageCount = pageCount
@@ -50,7 +49,7 @@ final class Book {
     }
 
     var status: ReadingStatus {
-        get { ReadingStatus(rawValue: statusRaw) ?? .wantToRead }
+        get { ReadingStatus(rawValue: statusRaw) ?? .reading }  // old "wantToRead" books land here
         set {
             statusRaw = newValue.rawValue
             finishedAt = newValue == .read ? (finishedAt ?? .now) : nil
@@ -73,12 +72,14 @@ final class ReadingSession {
     var duration: TimeInterval = 0
     var pages: Int = 0
     var book: Book?
+    var label: String?   // what was read in a free-reading session (newspaper, magazine…)
 
-    init(startedAt: Date, duration: TimeInterval, pages: Int, book: Book?) {
+    init(startedAt: Date, duration: TimeInterval, pages: Int, book: Book?, label: String? = nil) {
         self.startedAt = startedAt
         self.duration = duration
         self.pages = pages
         self.book = book
+        self.label = label
     }
 }
 

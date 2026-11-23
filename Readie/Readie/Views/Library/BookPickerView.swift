@@ -11,6 +11,8 @@ struct BookPickerView: View {
     @State private var query = ""
     @State private var selected: CatalogBook?
     @State private var showManual = false
+    @State private var showScanner = false
+    @State private var scanned: FoundBook?
 
     private var results: [CatalogBook] { CatalogStore.shared.search(query) }
 
@@ -44,7 +46,10 @@ struct BookPickerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .primaryAction) { Button("Add Manually") { showManual = true } }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Scan Barcode", systemImage: "barcode.viewfinder") { showScanner = true }
+                }
+                ToolbarItem(placement: .primaryAction) { Button("Add Manually") { scanned = nil; showManual = true } }
             }
             .overlay {
                 if results.isEmpty {
@@ -53,7 +58,8 @@ struct BookPickerView: View {
                     } description: {
                         Text("Can't find it? Add it yourself.")
                     } actions: {
-                        Button("Add Manually") { showManual = true }
+                        Button("Scan Barcode", systemImage: "barcode.viewfinder") { showScanner = true }
+                        Button("Add Manually") { scanned = nil; showManual = true }
                     }
                 }
             }
@@ -61,11 +67,14 @@ struct BookPickerView: View {
                                                                             set: { if !$0 { selected = nil } }),
                                 titleVisibility: .visible, presenting: selected) { book in
                 Button("Start reading") { add(book, .reading) }
-                Button("Want to read") { add(book, .wantToRead) }
                 Button("Already read") { add(book, .read) }
                 Button("Cancel", role: .cancel) {}
             } message: { Text($0.title) }
-            .sheet(isPresented: $showManual) { ManualBookView(defaultStatus: defaultStatus) { dismiss() } }
+            .sheet(isPresented: $showManual) { ManualBookView(defaultStatus: defaultStatus, prefill: scanned) { dismiss() } }
+            // The scanned book opens pre-filled in the manual form, so title/author/pages can be checked before adding.
+            .sheet(isPresented: $showScanner, onDismiss: { if scanned != nil { showManual = true } }) {
+                ScanBookView { scanned = $0 }
+            }
         }
     }
 
@@ -80,12 +89,13 @@ struct ManualBookView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     var defaultStatus: ReadingStatus
+    var prefill: FoundBook? = nil
     var onSaved: () -> Void
 
     @State private var title = ""
     @State private var author = ""
     @State private var pages: Int?
-    @State private var status: ReadingStatus = .wantToRead
+    @State private var status: ReadingStatus = .reading
 
     var body: some View {
         NavigationStack {
@@ -103,7 +113,10 @@ struct ManualBookView: View {
             }
             .navigationTitle("New Book")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear { status = defaultStatus }
+            .onAppear {
+                status = defaultStatus
+                if let prefill { title = prefill.title; author = prefill.author; pages = prefill.pages }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {

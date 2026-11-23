@@ -17,11 +17,12 @@ struct LibraryView: View {
                     Card {
                         VStack(alignment: .leading, spacing: 24) {
                             readingShelf
-                            spineShelf(.wantToRead)
                             spineShelf(.read)
                         }
                         .padding(16)
                     }
+
+                    bookmarks
 
                     Card {
                         VStack(spacing: 0) {
@@ -49,7 +50,7 @@ struct LibraryView: View {
                 }
             }
             .navigationDestination(for: Book.self) { BookDetailView(book: $0) }
-            .sheet(isPresented: $showPicker) { BookPickerView(defaultStatus: .wantToRead) }
+            .sheet(isPresented: $showPicker) { BookPickerView(defaultStatus: .reading) }
         }
     }
 
@@ -80,6 +81,39 @@ struct LibraryView: View {
                 .foregroundStyle(Color.readieAccent)
             }
         }
+    }
+
+    private var bookmarks: some View {
+        let finished = books(.read)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Bookmarks").font(.title3.weight(.semibold))
+                Spacer()
+                NavigationLink { BookmarksView() } label: {
+                    HStack(spacing: 4) {
+                        Text("\(finished.count) collected")
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(Color.readieAccent)
+                }
+            }
+            if finished.isEmpty {
+                Text("Finish a book to collect its bookmark.").font(.subheadline).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 90)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(finished) { book in
+                            NavigationLink(value: book) { Bookmark(book: book) }.buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .scrollClipDisabled()
+            }
+        }
+        .padding(.horizontal, 4)
     }
 
     private var readingShelf: some View {

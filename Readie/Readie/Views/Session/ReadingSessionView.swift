@@ -13,38 +13,34 @@ struct ReadingSessionView: View {
     @AppStorage("goalMinutes") private var goalMinutes = 30
     @AppStorage("goalPages") private var goalPages = 20
 
-    @ScaledMetric(relativeTo: .largeTitle) private var timerSize: CGFloat = 76
+    @ScaledMetric(relativeTo: .largeTitle) private var timerSize: CGFloat = 88
 
     @State private var showFinish = false
     @State private var showQuote = false
     @State private var showMemo = false
     @State private var confirmDiscard = false
+    @State private var askRecord = false
+    @State private var savedBook: Book?
+    @State private var saved = false
 
     private var book: Book? { books.first { $0.id == timer.bookID } }
-    private var reading: [Book] { books.filter { $0.status == .reading } }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                header
+            VStack(spacing: 28) {
                 Spacer(minLength: 0)
-                timerDisplay
-                goalLine
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in dial(at: ctx.date) }
                 Spacer(minLength: 0)
                 controls
-                HStack(spacing: 12) {
-                    Button { showQuote = true } label: { Label("Quote", systemImage: "quote.opening") }
-                    Button { showMemo = true } label: { Label("Voice note", systemImage: "mic.fill") }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                details
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 16)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Minimize", systemImage: "chevron.down") { router.showSession = false }
+                    Button("Back", systemImage: "chevron.left") { router.showSession = false }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Discard", systemImage: "trash", role: .destructive) { confirmDiscard = true }
@@ -52,89 +48,130 @@ struct ReadingSessionView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
         }
-        .sheet(isPresented: $showFinish) {
+        .sheet(isPresented: $showFinish, onDismiss: { if saved { askRecord = true } }) {
             FinishSessionSheet(book: book, duration: timer.elapsed()) { pages, finishedBook in
                 save(pages: pages, finishedBook: finishedBook)
             }
         }
-        .sheet(isPresented: $showQuote) { AddQuoteView(presetBook: book) }
-        .sheet(isPresented: $showMemo) { RecordMemoView(presetBook: book) }
+        .sheet(isPresented: $showQuote, onDismiss: { router.showSession = false }) { AddQuoteView(presetBook: savedBook) }
+        .sheet(isPresented: $showMemo, onDismiss: { router.showSession = false }) { RecordMemoView(presetBook: savedBook) }
+        .alert("Save something from this session?", isPresented: $askRecord) {
+            Button("Record a Voice Note") { showMemo = true }
+            Button("Add a Quote") { showQuote = true }
+            Button("Not Now", role: .cancel) { router.showSession = false }
+        } message: { Text("Keep what stuck with you while it's fresh.") }
         .confirmationDialog("Discard this session?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Discard Session", role: .destructive) { timer.reset(); router.showSession = false }
             Button("Keep Reading", role: .cancel) {}
         } message: { Text("The time you've read so far won't be saved.") }
-        .onChange(of: timer.phase) { _, phase in if phase == .idle { router.showSession = false } }
+        .onChange(of: timer.phase) { _, phase in if phase == .idle && !saved { router.showSession = false } }
     }
 
-    private var header: some View {
-        VStack(spacing: 4) {
-            if reading.count > 1 {
-                Menu {
-                    ForEach(reading) { b in Button(b.title) { timer.setBook(b.id) } }
-                } label: {
-                    Label(book?.title ?? String(localized: "Choose a book"), systemImage: "chevron.up.chevron.down")
-                        .font(.headline)
+    /// Seconds already read today in saved sessions.
+    private var todaySeconds: TimeInterval { Stats.lastDays(sessions: sessions).last?.seconds ?? 0 }
+
+    // MARK: Dial (Clock-style ring toward today's minutes goal)
+
+    private func dial(at date: Date) -> some View {
+        let elapsed = timer.elapsed(at: date)
+        let goal = TimeInterval(max(goalMinutes, 1) * 60)
+        let read = todaySeconds + elapsed
+        let left = max(goal - read, 0)
+        return ZStack {
+            Circle().stroke(Color(.tertiarySystemFill), lineWidth: 10)
+            Circle().trim(from: 0, to: min(read / goal, 1))
+                .stroke(Color.readieAccent, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            VStack(spacing: 10) {
+                Group {
+                    if left == 0 {
+                        Label("Goal reached", systemImage: "checkmark")
+                    } else if timer.phase == .running {
+                        Label(date.addingTimeInterval(left).formatted(date: .omitted, time: .shortened), systemImage: "flag.fill")
+                    } else {
+                        Label("Paused", systemImage: "pause.fill")
+                    }
                 }
-            } else {
-                Text(book?.title ?? String(localized: "Free reading")).font(.headline)
+                .font(.title3).foregroundStyle(.secondary)
+
+                Text(clock(elapsed))
+                    .font(.system(size: timerSize, weight: .thin))
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .accessibilityLabel("Time reading")
+                    .accessibilityValue(spoken(elapsed))
+
+                Text("\(Int(read / 60)) of \(goalMinutes) min today").font(.title3)
             }
-            if let book { Text(book.author).font(.subheadline).foregroundStyle(.secondary) }
+            .padding(.horizontal, 36)
         }
-        .multilineTextAlignment(.center)
+        .frame(maxWidth: 340)
+        .aspectRatio(1, contentMode: .fit)
+        .animation(.smooth, value: timer.phase)
     }
 
-    private var timerDisplay: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { ctx in
-            Text(clock(timer.elapsed(at: ctx.date)))
-                .font(.system(size: timerSize, weight: .light, design: .rounded))
-                .monospacedDigit()
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-                .accessibilityLabel("Time reading")
-                .accessibilityValue(spoken(timer.elapsed(at: ctx.date)))
-        }
-    }
-
-    private var goalLine: some View {
-        let today = Stats.lastDays(sessions: sessions).last
-        let target = goalKind == .minutes ? goalMinutes : goalPages
-        let done = goalKind == .minutes
-            ? Int(((today?.seconds ?? 0) + timer.elapsed()) / 60)
-            : (today?.pages ?? 0)
-        return Text(goalKind == .minutes ? "\(done) of \(target) min today" : "\(done) of \(target) pages today")
-            .font(.subheadline).foregroundStyle(.secondary)
-    }
+    // MARK: Controls
 
     private var controls: some View {
-        HStack(spacing: 16) {
-            if timer.phase == .running {
-                Button { timer.pause() } label: {
-                    Label("Pause", systemImage: "pause.fill").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
-                }
-                .buttonStyle(.glass)
-            } else {
-                Button { timer.resume() } label: {
-                    Label("Resume", systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
-                }
-                .buttonStyle(.glass)
-            }
-            Button {
+        HStack {
+            Button("Finish", systemImage: "checkmark") {
                 timer.pause()
                 showFinish = true
-            } label: {
-                Label("Finish", systemImage: "checkmark").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
             }
-            .buttonStyle(.glassProminent)
-            .tint(.readieButton)
+            .buttonStyle(CircleButtonStyle(fill: Color(.tertiarySystemFill), foreground: .primary))
+            Spacer()
+            if timer.phase == .running {
+                Button("Pause", systemImage: "pause.fill") { timer.pause() }
+                    .buttonStyle(CircleButtonStyle(fill: Color.readieAccent.opacity(0.2), foreground: .readieAccent))
+            } else {
+                Button("Resume", systemImage: "play.fill") { timer.resume() }
+                    .buttonStyle(CircleButtonStyle(fill: Color.readieAccent.opacity(0.2), foreground: .readieAccent))
+            }
         }
-        .controlSize(.large)
+    }
+
+    /// Grouped card under the controls, like the Label/Sound rows in Clock.
+    private var details: some View {
+        @Bindable var timer = timer
+        return VStack(spacing: 0) {
+            HStack {
+                Text(book == nil ? "Reading" : "Book")
+                Spacer()
+                if let book {
+                    Text(book.title).foregroundStyle(.secondary).lineLimit(1)
+                } else {
+                    TextField("Newspaper, magazine…", text: $timer.label)
+                        .multilineTextAlignment(.trailing)
+                        .foregroundStyle(.secondary)
+                        .submitLabel(.done)
+                }
+            }
+            .padding(.horizontal, 16).frame(minHeight: 52)
+            if let book, !book.author.isEmpty {
+                Divider().padding(.leading, 16)
+                HStack {
+                    Text("Author")
+                    Spacer()
+                    Text(book.author).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .padding(.horizontal, 16).frame(minHeight: 52)
+            }
+        }
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     private func save(pages: Int, finishedBook: Bool) {
+        // Set before finish(): the phase change must not close the screen, the voice-note prompt does.
+        saved = true
+        savedBook = book
+        let book = book
+        let label = timer.label.trimmingCharacters(in: .whitespaces)
         let duration = timer.finish()
         if duration >= 10 || pages > 0 {
             context.insert(ReadingSession(startedAt: Date().addingTimeInterval(-duration),
-                                          duration: duration, pages: pages, book: book))
+                                          duration: duration, pages: pages, book: book,
+                                          label: book == nil && !label.isEmpty ? label : nil))
         }
         if let book {
             book.currentPage += pages
@@ -144,12 +181,28 @@ struct ReadingSessionView: View {
                 if book.pageCount > 0 { book.currentPage = book.pageCount }
             }
         }
-        router.showSession = false
     }
 
     private func spoken(_ t: TimeInterval) -> String {
         let s = Int(t)
         return "\(s / 3600) hours, \((s % 3600) / 60) minutes, \(s % 60) seconds"
+    }
+}
+
+/// Large round button from the Clock app: tinted disc, icon only.
+struct CircleButtonStyle: ButtonStyle {
+    let fill: Color
+    let foreground: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .labelStyle(.iconOnly)
+            .font(.system(size: 30, weight: .semibold))
+            .foregroundStyle(foreground)
+            .frame(width: 84, height: 84)
+            .background(fill, in: Circle())
+            .opacity(configuration.isPressed ? 0.6 : 1)
+            .contentShape(Circle())
     }
 }
 
