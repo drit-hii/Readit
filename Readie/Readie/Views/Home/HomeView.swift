@@ -32,7 +32,7 @@ struct HomeView: View {
                         .buttonBorderShape(.circle)
                         .controlSize(.large)
                         .padding(.trailing, 20)
-                        .padding(.top, 8)
+                        .padding(.top, 28)
                 }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
@@ -76,7 +76,7 @@ struct HomeView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 16)
+            .padding(.top, 40)
             .padding(.bottom, 16)
     }
     
@@ -270,6 +270,7 @@ struct HomeView: View {
                 freeReadingButton.frame(maxWidth: .infinity)
             }
             .padding(.horizontal, 20)
+            .padding(.top, 40)
             .padding(.bottom, 16)
         }
         .scrollBounceBehavior(.basedOnSize)
