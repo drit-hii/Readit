@@ -378,7 +378,7 @@
 				CODE_SIGN_ENTITLEMENTS = Readie/Readie.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = M3SY65UTBC;
+				DEVELOPMENT_TEAM = 26V9Z6NPKB;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -386,6 +386,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Readie uses the camera to scan the barcode on the back of your books.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Readie uses the microphone to record your voice notes.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Readie turns your voice notes into text.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -420,7 +421,7 @@
 				CODE_SIGN_ENTITLEMENTS = Readie/Readie.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = M3SY65UTBC;
+				DEVELOPMENT_TEAM = 26V9Z6NPKB;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -428,6 +429,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Readie uses the camera to scan the barcode on the back of your books.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Readie uses the microphone to record your voice notes.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Readie turns your voice notes into text.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

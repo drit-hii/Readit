@@ -39,6 +39,7 @@ final class SpeechTranscriber {
             request = req
 
             let input = engine.inputNode
+            guard input.outputFormat(forBus: 0).sampleRate > 0 else { status = .unavailable; return }
             input.removeTap(onBus: 0)
             Self.installTap(on: input, request: req)
             engine.prepare()

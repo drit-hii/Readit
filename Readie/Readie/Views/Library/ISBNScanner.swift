@@ -74,12 +74,12 @@ struct ISBNScanner: UIViewControllerRepresentable {
         let vc = DataScannerViewController(recognizedDataTypes: [.barcode(symbologies: [.ean13])],
                                            qualityLevel: .balanced, isHighlightingEnabled: true)
         vc.delegate = context.coordinator
-        try? vc.startScanning()
         return vc
     }
 
     func updateUIViewController(_ vc: DataScannerViewController, context: Context) {
         context.coordinator.onISBN = onISBN
+        if !vc.isScanning { try? vc.startScanning() }
     }
 
     static func dismantleUIViewController(_ vc: DataScannerViewController, coordinator: Coordinator) {

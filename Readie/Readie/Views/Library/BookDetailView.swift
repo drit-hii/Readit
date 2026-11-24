@@ -41,7 +41,19 @@ struct BookDetailView: View {
 
             if book.status != .read {
                 Section {
-                    Button { startReading() } label: { Label("Start Reading", systemImage: "book.fill") }
+                    Button { startReading() } label: {
+                        if timer.phase == .idle {
+                            Label("Start Reading", systemImage: "book.fill")
+                        } else if timer.bookID == book.id {
+                            Label("Resume Reading", systemImage: "book.fill")
+                        } else {
+                            Label("Go to Current Session", systemImage: "timer")
+                        }
+                    }
+                } footer: {
+                    if timer.phase != .idle && timer.bookID != book.id {
+                        Text("Finish your current session to start reading this book.")
+                    }
                 }
             }
 
@@ -56,14 +68,19 @@ struct BookDetailView: View {
 
             Section {
                 Button("Remove from Library", role: .destructive) { confirmDelete = true }
+                    .disabled(isInSession)
+            } footer: {
+                if isInSession { Text("Finish the current reading session to remove this book.") }
             }
         }
         .navigationTitle(book.title)
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Remove this book?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Remove", role: .destructive) { context.delete(book); dismiss() }
+            Button("Remove", role: .destructive) { book.remove(from: context); dismiss() }
         } message: { Text("Your quotes and voice notes are kept.") }
     }
+
+    private var isInSession: Bool { timer.phase != .idle && timer.bookID == book.id }
 
     private var timeRead: String {
         let total = book.sessions.reduce(0) { $0 + $1.duration }

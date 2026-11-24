@@ -107,6 +107,7 @@ final class ReadingTimer {
         let favourite = SharedStore.loadFavourites().randomElement()
         let attributes = ReadingActivityAttributes(
             bookTitle: title,
+            goalSeconds: Double(max(UserDefaults.standard.object(forKey: "goalMinutes") as? Int ?? 30, 1) * 60),
             quote: favourite?.text,
             quoteSource: favourite?.source
         )

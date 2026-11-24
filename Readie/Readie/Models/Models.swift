@@ -56,6 +56,12 @@ final class Book {
         }
     }
 
+    /// Deletes the book; its past sessions keep the title so History still shows it.
+    func remove(from context: ModelContext) {
+        sessions.forEach { $0.label = title }
+        context.delete(self)
+    }
+
     var progress: Double {
         pageCount > 0 ? min(Double(currentPage) / Double(pageCount), 1) : 0
     }

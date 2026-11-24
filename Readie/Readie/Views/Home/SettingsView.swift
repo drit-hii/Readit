@@ -1,8 +1,29 @@
-// GoalSheet.swift
+// SettingsView.swift
+// Opened from the gear on Home and by tapping the daily goal.
 import SwiftUI
 
-struct GoalSheet: View {
+enum Appearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+    var id: String { rawValue }
+    var title: LocalizedStringKey {
+        switch self {
+        case .system: "Automatic"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+}
+
+struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("appearance") private var appearance: Appearance = .system
     @AppStorage("goalKind") private var goalKind: GoalKind = .minutes
     @AppStorage("goalMinutes") private var goalMinutes = 30
     @AppStorage("goalPages") private var goalPages = 20
@@ -10,13 +31,17 @@ struct GoalSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Appearance") {
+                    Picker("Theme", selection: $appearance) {
+                        ForEach(Appearance.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                }
                 Section {
                     Picker("Measure by", selection: $goalKind) {
                         ForEach(GoalKind.allCases) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.segmented)
-                }
-                Section {
                     if goalKind == .minutes {
                         Stepper(value: $goalMinutes, in: 5...480, step: 5) {
                             Text("\(goalMinutes) minutes a day")
@@ -26,14 +51,19 @@ struct GoalSheet: View {
                             Text("\(goalPages) pages a day")
                         }
                     }
+                } header: {
+                    Text("Daily Goal")
                 } footer: {
                     Text("Your goal ring on the Today screen fills as you read.")
                 }
+                Section("Reminder") { ReminderSettings() }
             }
-            .navigationTitle("Daily Goal")
+            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.large])
+        // An open sheet doesn't pick up the app's new scheme; apply it here so the change shows at once.
+        .preferredColorScheme(appearance.colorScheme)
     }
 }

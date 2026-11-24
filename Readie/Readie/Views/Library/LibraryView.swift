@@ -180,6 +180,7 @@ struct LibraryView: View {
 struct BookListView: View {
     let status: ReadingStatus
     @Environment(\.modelContext) private var context
+    @Environment(ReadingTimer.self) private var timer
     @Query(sort: \Book.addedAt, order: .reverse) private var all: [Book]
 
     var body: some View {
@@ -197,7 +198,12 @@ struct BookListView: View {
                     .padding(.vertical, 4)
                 }
             }
-            .onDelete { offsets in offsets.map { list[$0] }.forEach(context.delete) }
+            .onDelete { offsets in
+                // The book in the running session stays: its session still needs it.
+                offsets.map { list[$0] }
+                    .filter { timer.phase == .idle || $0.id != timer.bookID }
+                    .forEach { $0.remove(from: context) }
+            }
         }
         .navigationTitle(status.title)
         .overlay {

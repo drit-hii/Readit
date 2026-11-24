@@ -2,86 +2,40 @@
 import SwiftUI
 import SwiftData
 
+/// Add a book: scan its barcode, or type it in.
 struct BookPickerView: View {
-    @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @Query private var existing: [Book]
 
     var defaultStatus: ReadingStatus = .reading
-    @State private var query = ""
-    @State private var selected: CatalogBook?
     @State private var showManual = false
     @State private var showScanner = false
     @State private var scanned: FoundBook?
 
-    private var results: [CatalogBook] { CatalogStore.shared.search(query) }
-
     var body: some View {
         NavigationStack {
-            List(results) { book in
-                let inLibrary = existing.contains { $0.catalogID == book.id }
-                Button {
-                    if !inLibrary { selected = book }
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(book.title).font(.headline).foregroundStyle(.primary)
-                            Text(book.author).font(.subheadline).foregroundStyle(.secondary)
-                            if let pages = book.pages {
-                                Text("\(pages) pages").font(.caption).foregroundStyle(.tertiary)
-                            }
-                        }
-                        Spacer()
-                        if inLibrary {
-                            Label("In library", systemImage: "checkmark.circle.fill")
-                                .labelStyle(.iconOnly).foregroundStyle(Color.readieAccent)
-                                .accessibilityLabel("Already in your library")
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
+            ContentUnavailableView {
+                Label("Add a Book", systemImage: "books.vertical.fill")
+            } description: {
+                Text("Scan the barcode on the back of the book, or type in its title.")
+            } actions: {
+                Button("Scan Barcode", systemImage: "barcode.viewfinder") { scanned = nil; showScanner = true }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.readieButton)
+                    .controlSize(.large)
+                Button("Add Manually", systemImage: "square.and.pencil") { scanned = nil; showManual = true }
+                    .controlSize(.large)
             }
-            .searchable(text: $query, prompt: "Title or author")
-            .navigationTitle("Add a Book")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Scan Barcode", systemImage: "barcode.viewfinder") { showScanner = true }
-                }
-                ToolbarItem(placement: .primaryAction) { Button("Add Manually") { scanned = nil; showManual = true } }
             }
-            .overlay {
-                if results.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Results", systemImage: "magnifyingglass")
-                    } description: {
-                        Text("Can't find it? Add it yourself.")
-                    } actions: {
-                        Button("Scan Barcode", systemImage: "barcode.viewfinder") { showScanner = true }
-                        Button("Add Manually") { scanned = nil; showManual = true }
-                    }
-                }
-            }
-            .confirmationDialog("Add to your library", isPresented: Binding(get: { selected != nil },
-                                                                            set: { if !$0 { selected = nil } }),
-                                titleVisibility: .visible, presenting: selected) { book in
-                Button("Start reading") { add(book, .reading) }
-                Button("Already read") { add(book, .read) }
-                Button("Cancel", role: .cancel) {}
-            } message: { Text($0.title) }
             .sheet(isPresented: $showManual) { ManualBookView(defaultStatus: defaultStatus, prefill: scanned) { dismiss() } }
             // The scanned book opens pre-filled in the manual form, so title/author/pages can be checked before adding.
             .sheet(isPresented: $showScanner, onDismiss: { if scanned != nil { showManual = true } }) {
                 ScanBookView { scanned = $0 }
             }
         }
-    }
-
-    private func add(_ book: CatalogBook, _ status: ReadingStatus) {
-        context.insert(Book(title: book.title, author: book.author, pageCount: book.pages ?? 0,
-                            status: status, catalogID: book.id))
-        dismiss()
+        .presentationDetents([.medium])
     }
 }
 

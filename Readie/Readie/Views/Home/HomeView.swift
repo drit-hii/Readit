@@ -12,7 +12,7 @@ struct HomeView: View {
     @AppStorage("goalMinutes") private var goalMinutes = 30
     @AppStorage("goalPages") private var goalPages = 20
     
-    @State private var showGoal = false
+    @State private var showSettings = false
     @State private var showPicker = false
     @State private var selectedID: UUID?
     @ScaledMetric(relativeTo: .largeTitle) private var challengeSize: CGFloat = 48
@@ -25,8 +25,17 @@ struct HomeView: View {
         NavigationStack {
             Group { reading.isEmpty && timer.phase == .idle ? AnyView(emptyState) : AnyView(todayState) }
                 .background((reading.isEmpty ? Color(.systemBackground) : Color(.systemGroupedBackground)).ignoresSafeArea())
+                .overlay(alignment: .topTrailing) {
+                    Button("Settings", systemImage: "gearshape") { showSettings = true }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.glass)
+                        .buttonBorderShape(.circle)
+                        .controlSize(.large)
+                        .padding(.trailing, 20)
+                        .padding(.top, 8)
+                }
         }
-        .sheet(isPresented: $showGoal) { GoalSheet() }
+        .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showPicker) { BookPickerView(defaultStatus: .reading) }
     }
     
@@ -77,7 +86,7 @@ struct HomeView: View {
                 .font(.footnote.weight(.medium)).tracking(0.8).textCase(.uppercase)
                 .foregroundStyle(Color.readieAccent)
             
-            Button { showGoal = true } label: {
+            Button { showSettings = true } label: {
                 Text(goalKind == .minutes ? "\(target) min" : "\(target) pages")
                     .font(.system(size: challengeSize, weight: .bold))
                     .minimumScaleFactor(0.6)
@@ -165,7 +174,10 @@ struct HomeView: View {
                     Label("Start reading", systemImage: "book.fill")
                 } else {
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                        Label("Resume · \(clock(timer.elapsed(at: ctx.date)))", systemImage: "book.fill")
+                        Label(book == nil || book?.id == timer.bookID
+                              ? "Resume · \(clock(timer.elapsed(at: ctx.date)))"
+                              : "Current session · \(clock(timer.elapsed(at: ctx.date)))",
+                              systemImage: "book.fill")
                             .monospacedDigit()
                     }
                 }

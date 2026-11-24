@@ -21,8 +21,17 @@ struct SharedQuote: Codable, Hashable, Identifiable {
     }
 }
 
+/// The book from the latest reading session, shown by the widget.
+struct SharedBook: Codable, Hashable {
+    var title: String
+    var author: String
+    var currentPage: Int
+    var pageCount: Int
+}
+
 enum SharedStore {
     private static let key = "favouriteQuotes"
+    private static let bookKey = "lastBook"
     private static var defaults: UserDefaults { UserDefaults(suiteName: AppGroup.id) ?? .standard }
 
     static func saveFavourites(_ quotes: [SharedQuote]) {
@@ -30,6 +39,15 @@ enum SharedStore {
             defaults.set(data, forKey: key)
         }
         WidgetCenter.shared.reloadTimelines(ofKind: "QuoteWidget")
+    }
+
+    static func saveLastBook(_ book: SharedBook?) {
+        defaults.set(book.flatMap { try? JSONEncoder().encode($0) }, forKey: bookKey)
+        WidgetCenter.shared.reloadTimelines(ofKind: "QuoteWidget")
+    }
+
+    static func loadLastBook() -> SharedBook? {
+        defaults.data(forKey: bookKey).flatMap { try? JSONDecoder().decode(SharedBook.self, from: $0) }
     }
 
     static func loadFavourites() -> [SharedQuote] {
@@ -49,6 +67,8 @@ struct ReadingActivityAttributes: ActivityAttributes {
     }
 
     var bookTitle: String
+    /// Daily goal in seconds; the ring in the Dynamic Island fills toward it.
+    var goalSeconds: Double = 30 * 60
     /// Only set when the reader has a favourite quote. Nil means nothing is shown.
     var quote: String?
     var quoteSource: String?
