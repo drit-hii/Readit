@@ -109,7 +109,8 @@ struct HomeView: View {
                 startButton(nil)   // free reading while the timer is running
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 0) {
+                    // A gap between cards, so the next book peeks in instead of touching this one.
+                    HStack(spacing: 14) {
                         ForEach(reading) { book in
                             bookCard(book)
                                 .containerRelativeFrame(.horizontal)
@@ -118,7 +119,7 @@ struct HomeView: View {
                     }
                     .scrollTargetLayout()
                 }
-                .scrollTargetBehavior(.paging)
+                .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
                 .scrollPosition(id: $selectedID)
                 .scrollClipDisabled()
                 
