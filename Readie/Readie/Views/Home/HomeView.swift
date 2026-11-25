@@ -23,7 +23,7 @@ struct HomeView: View {
     
     var body: some View {
         NavigationStack {
-            Group { reading.isEmpty && timer.phase == .idle ? AnyView(emptyState) : AnyView(todayState) }
+            Group { reading.isEmpty ? AnyView(emptyState) : AnyView(todayState) }
                 .background((reading.isEmpty ? Color(.systemBackground) : Color(.systemGroupedBackground)).ignoresSafeArea())
                 .overlay(alignment: .topTrailing) {
                     Button("Settings", systemImage: "gearshape") { showSettings = true }
@@ -105,37 +105,33 @@ struct HomeView: View {
     
     private var bookCarousel: some View {
         VStack(spacing: 10) {
-            if reading.isEmpty {
-                startButton(nil)   // free reading while the timer is running
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    // A gap between cards, so the next book peeks in instead of touching this one.
-                    HStack(spacing: 14) {
-                        ForEach(reading) { book in
-                            bookCard(book)
-                                .containerRelativeFrame(.horizontal)
-                                .id(book.id)
-                        }
+            ScrollView(.horizontal, showsIndicators: false) {
+                // A gap between cards, so the next book peeks in instead of touching this one.
+                HStack(spacing: 14) {
+                    ForEach(reading) { book in
+                        bookCard(book)
+                            .containerRelativeFrame(.horizontal)
+                            .id(book.id)
                     }
-                    .scrollTargetLayout()
                 }
-                .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
-                .scrollPosition(id: $selectedID)
-                .scrollClipDisabled()
-                
-                if reading.count > 1 {
-                    HStack(spacing: 8) {
-                        ForEach(reading) { book in
-                            Circle()
-                                .fill(book.id == current?.id ? Color.readieAccent : Color(.tertiaryLabel))
-                                .frame(width: 7, height: 7)
-                        }
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Book \((reading.firstIndex { $0.id == current?.id } ?? 0) + 1) of \(reading.count)")
-                }
-                if timer.phase == .idle { freeReadingButton }
+                .scrollTargetLayout()
             }
+            .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+            .scrollPosition(id: $selectedID)
+            .scrollClipDisabled()
+            
+            if reading.count > 1 {
+                HStack(spacing: 8) {
+                    ForEach(reading) { book in
+                        Circle()
+                            .fill(book.id == current?.id ? Color.readieAccent : Color(.tertiaryLabel))
+                            .frame(width: 7, height: 7)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Book \((reading.firstIndex { $0.id == current?.id } ?? 0) + 1) of \(reading.count)")
+            }
+            if timer.phase == .idle { freeReadingButton }
         }
     }
     
@@ -213,13 +209,7 @@ struct HomeView: View {
     private var emptyState: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                        .font(.footnote.weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
-                    Text("What are you reading today?").font(.title.bold())
-                    Text("Pick a book to start").font(.title3).foregroundStyle(.secondary)
-                }
-                .accessibilityElement(children: .combine)
+                challenge
                 
                 Card(fill: Color(.secondarySystemBackground)) {
                     VStack(spacing: 18) {
@@ -266,8 +256,6 @@ struct HomeView: View {
                         WeekdayAxis(days: days).padding(.horizontal, 6).padding(.bottom, 10)
                     }
                 }
-                
-                freeReadingButton.frame(maxWidth: .infinity)
             }
             .padding(.horizontal, 20)
             .padding(.top, 40)
